@@ -3,9 +3,12 @@ import pandas as pd
 from tqdm.auto import tqdm
 from sentence_transformers import SentenceTransformer
 import numpy as np
+from dotenv import load_dotenv
+import os
+load_dotenv()
+api_key = "9f8be296-36ca-4a85-adf0-82939f72b2cf"
 
-
-pc = Pinecone(api_key="9f8be296-36ca-4a85-adf0-82939f72b2cf")
+pc = Pinecone(api_key=api_key)
 index = pc.Index('aidetection')
 data = pd.read_csv('data.csv')
 
@@ -54,10 +57,15 @@ for response in xc.matches:
 data = pd.DataFrame(data)
 
 
-aiData = pd.read_csv('/data/aiVector.csv')
-humanData = pd.read_csv('/data/humanVector.csv')
+aiData = pd.read_csv('./data/aiVector.csv')
+humanData = pd.read_csv('./data/humanVector.csv')
+aiData = aiData[:1000]
+humanData = humanData[:1000]
 collatedData= aiData.append(humanData)
+
+# s = pd.DataFrame()
 def accMatrix(text):
+    global s
     xq = model.encode(text).tolist()
     xc = index.query(vector=xq, top_k=5, include_metadata=True)
     simData = []
@@ -65,17 +73,39 @@ def accMatrix(text):
         simData.append({'id': response['id'], 'score': response['score']})
 
     simData = pd.DataFrame(simData)
-
     simData['id'] = simData['id'].astype(int)
     count_ai = sum(value >= 150000 for value in simData['id'])
     count_human = sum(value < 150000 for value in simData['id'])
     if count_ai > count_human:
-        collatedData['predicted'] = 'AI'
+        return 'AI'
     else:
-        collatedData['predicted'] = 'Human'
+        return 'Human'
 
-for i in collatedData['context']:
-    accMatrix(i)
+    # if count_ai > count_human:
+    #     aiData['predicted'] = 'AI'
+    # else:
+    #     aiData['predicted'] = 'Human'
+
+    # s = simData
+
+aiData['predicted'] = aiData['context'].apply(accMatrix)
+humanData['predicted'] = humanData['context'].apply(accMatrix)
+
+aiData['predicted'] = aiData['predicted'].replace({'AI': 1, 'Human': 0})
+humanData['predicted'] = humanData['predicted'].replace({'AI': 1, 'Human': 0})
+
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
+confAI = confusion_matrix(aiData['isAI'],aiData['predicted'])
+confHuman = confusion_matrix(humanData['isAI'],humanData['predicted'])
+
+dispAI = ConfusionMatrixDisplay(confAI)
+dispAI.plot()
+plt.show()
+
+dispHuman = ConfusionMatrixDisplay(confHuman)
+dispHuman.plot()
+plt.show()
 
 # # batch_size = 128
 # # vector_limit = 100000

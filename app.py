@@ -29,7 +29,7 @@ stop_words = stopwords.words('english')
 load_dotenv()
 api_key = os.getenv("API_KEY")
 
-pc = Pinecone(api_key="9f8be296-36ca-4a85-adf0-82939f72b2cf")
+pc = Pinecone(api_key=api_key)
 model = SentenceTransformer('all-MiniLM-L6-v2')
 index = pc.Index('aidetection')
 st.header('Detect AI Generated Text 🌎')
@@ -306,63 +306,106 @@ with tab3:
            st.success('Likely to be Human Written')
 
 from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.ensemble import AdaBoostClassifier
-from sklearn.ensemble import BaggingClassifier
-from sklearn.ensemble import GradientBoostingClassifier
-from sklearn import metrics
-from sklearn.metrics import confusion_matrix
+
 
 lg = LogisticRegression(penalty='l1', solver='liblinear')
-sv = SVC(kernel='sigmoid', gamma=1.0)
+
 mnb = MultinomialNB()
 dtc = DecisionTreeClassifier(max_depth=5)
 knn = KNeighborsClassifier()
-rfc = RandomForestClassifier(n_estimators=50, random_state=2)
-abc = AdaBoostClassifier(n_estimators=50, random_state=2)
-bg = BaggingClassifier(n_estimators=50, random_state=2)
-gbc = GradientBoostingClassifier(n_estimators=50, random_state=2)
+rfc = RandomForestClassifier(n_estimators=1000, criterion= "gini", max_features = "sqrt", max_depth = None, random_state=42)
+
 
 classifiers = {
     'Logistic Regression': lg,
-    'Multinomial NB': mnb,
-    'Support Vector': sv,
-    'Decision Tree Classifier': dtc,
+    'Multinomial Naive Bayes': mnb,
     'KNN': knn,
-    'Random Forest Classifier': rfc,
-    'Ada Boost Classifier': abc,
-    'Bagging Classifier': bg,
-    'Gradient Boosting Classifier': gbc,
+    'Random Forest Classifier': rfc
 }
 
-from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
-from sklearn.model_selection import train_test_split
+
 from sklearn.preprocessing import StandardScaler,MinMaxScaler
-from sklearn.metrics import classification_report, accuracy_score
-from sklearn.model_selection import cross_val_score
-from sklearn.model_selection import KFold,GridSearchCV
 scaler = MinMaxScaler()
 import joblib
 import statsmodels.api as sm
 
 with tab4:
    st.header("Classifiers")
-   st.selectbox('Select your Classifier', classifiers.keys())
+   model = st.selectbox('Select your Classifier', classifiers.keys())
+   # st.write(model)
+   X_train_norm = pd.read_csv('./data/X_train_norm.csv')
+   y_train_norm = pd.read_csv('./data/y_train_norm.csv')
    modelBtn = st.button('Predict')
    if modelBtn:
        X_new = add_features_to_test_data(textQuery)
        test_df = pd.DataFrame(scaler.fit_transform(X_new), columns=X_new.columns)
-       loaded_logreg_model = joblib.load('trained_model_logistic_regression.pkl')
-       predictions = loaded_logreg_model.predict(X_new)
-       st.write(predictions)
-       if predictions[0] < 0.5:
-           st.write('This text is human written.')
-       else:
-           st.write('This text is AI written.')
+       if model == 'Logistic Regression':
+
+           loaded_logreg_model = joblib.load('./pkl_files/trained_model_logistic_regression.pkl')
+           predictions = loaded_logreg_model.predict(X_new)
+           col1, col2 = st.columns(2)
+           with col1:
+               st.metric('Accuracy', '79.13%')
+           with col2:
+               st.metric('Predicted Probability', round(predictions[0],4))
+           if predictions[0] < 0.5:
+               st.success('This text is Human written.')
+           else:
+               st.error('This text is AI written.')
+       if model == 'Multinomial Naive Bayes':
+
+           # loaded_naivebayes_model = joblib.load('trained_model_naive_bayes_classifier.pkl')
+           loaded_naivebayes_model = mnb
+           loaded_naivebayes_model.fit(X_train_norm, y_train_norm)
+           predictions = loaded_naivebayes_model.predict_proba(test_df)
+           col1, col2, col3 = st.columns(3)
+           with col1:
+               st.metric('Accuracy', '73.00%')
+           with col2:
+               st.metric('Predicted Probability Human', round(predictions[0, 0], 4))
+           with col3:
+               st.metric('Predicted Probability AI', round(predictions[0, 1], 4))
+           if predictions[0, 0] > 0.5:
+               st.success('This text is Human written.')
+           else:
+               st.error('This text is AI written.')
+       if model == 'KNN':
+
+           loaded_knn_model = joblib.load('./pkl_files/trained_model_knn.pkl')
+           loaded_knn_model.fit(X_train_norm, y_train_norm)
+           predictions = loaded_knn_model.predict_proba(test_df)
+           col1, col2, col3 = st.columns(3)
+           with col1:
+               st.metric('Accuracy', '83.88%')
+           with col2:
+               st.metric('Predicted Probability Human', round(predictions[0,0], 4))
+           with col3:
+               st.metric('Predicted Probability AI', round(predictions[0,1], 4))
+
+           if predictions[0, 0] > 0.5:
+               st.success('This text is Human written.')
+           else:
+               st.error('This text is AI written.')
+       if model == 'Random Forest Classifier':
+
+           # loaded_rf_model = joblib.load('./pkl_files/trained_model_random_forest.pkl')
+           r = rfc.fit(X_train_norm, y_train_norm)
+           predictions = r.predict(X_new)
+           col1, col2 = st.columns(2)
+           with col1:
+               st.metric('Accuracy', '83.06%')
+           with col2:
+               st.metric('Predicted Class', predictions[0])
+           if predictions == 0:
+               st.success('This text is Human written.')
+           else:
+               st.error('This text is AI written.')
+
+
 
 
 
